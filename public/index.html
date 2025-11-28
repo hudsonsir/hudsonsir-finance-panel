@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
+    <title>H U D S O N | 数据航线</title>
+    <style>
+        /* --- 基础样式 --- */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background-color: #050505;
+            color: #fff;
+            font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        canvas {
+            position: absolute;
+            z-index: 1;
+        }
+
+        /* --- UI 层 --- */
+        .ui-layer {
+            position: relative;
+            z-index: 10;
+            text-align: center;
+            pointer-events: none; /* 让鼠标事件穿透到 Canvas */
+            mix-blend-mode: exclusion;
+        }
+
+        h1 {
+            font-weight: 200;
+            font-size: 3rem;
+            letter-spacing: 0.5em;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+        }
+
+        p {
+            color: #888;
+            font-size: 0.9rem;
+            letter-spacing: 0.2em;
+        }
+        
+        /* 右下角状态指示 */
+        .status {
+            position: absolute;
+            bottom: 30px;
+            right: 30px;
+            text-align: right;
+            z-index: 10;
+        }
+        .status-item {
+            display: block;
+            font-size: 10px;
+            color: #555;
+            letter-spacing: 1px;
+            margin-top: 5px;
+        }
+        .dot {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background: #0f0;
+            border-radius: 50%;
+            margin-right: 8px;
+            box-shadow: 0 0 5px #0f0;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="ui-layer">
+        <h1>Connect</h1>
+        <p>全球节点实时传输</p>
+    </div>
+
+    <div class="status">
+        <span class="status-item"><span class="dot"></span>SYSTEM ONLINE</span>
+        <span class="status-item">NODES: ACTIVE</span>
+        <span class="status-item">LATENCY: 12ms</span>
+    </div>
+
+    <canvas id="world"></canvas>
+
+    <script>
+        const canvas = document.getElementById('world');
+        const ctx = canvas.getContext('2d');
+
+        let width, height;
+        
+        // --- 参数配置 ---
+        const CONFIG = {
+            radius: 220,          // 地球半径
+            rotationSpeed: 0.003, // 旋转速度
+            particleCount: 400,   // 背景粒子数
+            bgOpacity: 0.15,      // 背景粒子透明度
+            nodeCount: 8,         // 核心节点数量（模拟城市）
+            arcHeight: 1.3,       // 连接线的拱起高度 (1.0 = 贴地, >1.0 = 拱起)
+        };
+
+        // --- 核心数据结构 ---
+        let particles = []; // 背景点
+        let nodes = [];     // 核心节点
+        let links = [];     // 连线
+
+        // 工具函数：3D 投影到 2D
+        function project(x, y, z, angle) {
+            // 绕 Y 轴旋转
+            const rotX = x * Math.cos(angle) - z * Math.sin(angle);
+            const rotZ = z * Math.cos(angle) + x * Math.sin(angle);
+            
+            // 透视缩放
+            const scale = 1000 / (1000 - rotZ);
+            const x2d = (rotX * scale) + width / 2;
+            const y2d = (y * scale) + height / 2;
+            const alpha = (rotZ + CONFIG.radius) / (2 * CONFIG.radius); // 深度透明度
+
+            return { x: x2d, y: y2d, scale: scale, alpha: alpha, z: rotZ };
+        }
+
+        class Particle {
+            constructor(isNode = false) {
+                // 球坐标随机生成
+                const theta = Math.random() * 2 * Math.PI;
+                const phi = Math.acos((Math.random() * 2) - 1);
+                
+                this.x = CONFIG.radius * Math.sin(phi) * Math.cos(theta);
+                this.y = CONFIG.radius * Math.sin(phi) * Math.sin(theta);
+                this.z = CONFIG.radius * Math.cos(phi);
+                
+                this.isNode = isNode;
+            }
+
+            draw(angle) {
+                const p = project(this.x, this.y, this.z, angle);
+                
+                // 根据是否是节点，绘制不同样式
+                if (this.isNode) {
+                    // 只有当前面时才绘制得比较明显
+                    if (p.alpha > 0.4) {
+                        ctx.beginPath();
+                        ctx.fillStyle = '#fff';
+                        ctx.arc(p.x, p.y, 3 * p.scale, 0, Math.PI * 2);
+                        ctx.fill();
+                        
+                        // 节点光晕
+                        ctx.beginPath();
+                        ctx.fillStyle = `rgba(255, 255, 255, ${0.2 * p.scale})`;
+                        ctx.arc(p.x, p.y, 10 * p.scale, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                } else {
+                    // 普通背景粒子
+                    ctx.fillStyle = `rgba(255, 255, 255, ${p.alpha * CONFIG.bgOpacity})`;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, 1.2 * p.scale, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                
+                return p; // 返回投影后的点，供连线使用
+            }
+        }
+
+        // 弧线连接类
+        class Arc {
+            constructor(nodeA, nodeB) {
+                this.start = nodeA;
+                this.end = nodeB;
+                // 计算控制点（用于贝塞尔曲线，使线条拱起）
+                // 简单的向量加法：中点 * 高度系数
+                const midX = (nodeA.x + nodeB.x) / 2;
+                const midY = (nodeA.y + nodeB.y) / 2;
+                const midZ = (nodeA.z + nodeB.z) / 2;
+                // 归一化并放大
+                const dist = Math.sqrt(midX*midX + midY*midY + midZ*midZ);
+                this.ctrlX = (midX / dist) * CONFIG.radius * CONFIG.arcHeight;
+                this.ctrlY = (midY / dist) * CONFIG.radius * CONFIG.arcHeight;
+                this.ctrlZ = (midZ / dist) * CONFIG.radius * CONFIG.arcHeight;
+                
+                // 动画偏移量 (0-1)
+                this.flow = Math.random(); 
+                this.speed = 0.005 + Math.random() * 0.005;
+            }
+
+            draw(angle) {
+                // 获取两个端点的投影位置
+                const p1 = project(this.start.x, this.start.y, this.start.z, angle);
+                const p2 = project(this.end.x, this.end.y, this.end.z, angle);
+                const pc = project(this.ctrlX, this.ctrlY, this.ctrlZ, angle);
+
+                // 如果两点都在背面，就不画线，减少视觉干扰
+                if (p1.alpha < 0.2 && p2.alpha < 0.2) return;
+
+                // 绘制贝塞尔曲线（这是一条平滑的曲线）
+                // 由于 Canvas 2D 的 quadraticCurveTo 是平面的，我们在 3D 旋转下直接画可能会稍微失真
+                // 但在视觉欺骗上通常足够了。为了更严谨，我们应该对曲线上采样点进行投影。
+                // 这里为了极简效果，使用采样法绘制“真3D”曲线。
+                
+                ctx.beginPath();
+                ctx.strokeStyle = `rgba(255, 255, 255, 0.15)`;
+                ctx.lineWidth = 1;
+                
+                // 采样 20 个点来画这条弧线
+                let first = true;
+                const segments = 20;
+                
+                // 存储路径上的点，用于画传输的小球
+                let pathPoints = []; 
+
+                for (let i = 0; i <= segments; i++) {
+                    const t = i / segments;
+                    // 二阶贝塞尔公式: B(t) = (1-t)^2 * P0 + 2(1-t)t * P1 + t^2 * P2
+                    const x = (1-t)*(1-t)*this.start.x + 2*(1-t)*t*this.ctrlX + t*t*this.end.x;
+                    const y = (1-t)*(1-t)*this.start.y + 2*(1-t)*t*this.ctrlY + t*t*this.end.y;
+                    const z = (1-t)*(1-t)*this.start.z + 2*(1-t)*t*this.ctrlZ + t*t*this.end.z;
+                    
+                    const proj = project(x, y, z, angle);
+                    pathPoints.push(proj);
+
+                    if (first) {
+                        ctx.moveTo(proj.x, proj.y);
+                        first = false;
+                    } else {
+                        ctx.lineTo(proj.x, proj.y);
+                    }
+                }
+                ctx.stroke();
+
+                // --- 绘制传输数据包 (流动的小点) ---
+                this.flow += this.speed;
+                if (this.flow > 1) this.flow = 0;
+                
+                // 找出 flow 对应在路径上的位置
+                const index = Math.floor(this.flow * segments);
+                if (index < pathPoints.length) {
+                    const packet = pathPoints[index];
+                    // 只有在前面时才显示数据包
+                    if (packet.z > -100) { 
+                        ctx.beginPath();
+                        ctx.fillStyle = '#fff';
+                        ctx.shadowBlur = 5;
+                        ctx.shadowColor = '#fff';
+                        ctx.arc(packet.x, packet.y, 2, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.shadowBlur = 0; // 重置
+                    }
+                }
+            }
+        }
+
+        // 初始化
+        function init() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+
+            particles = [];
+            nodes = [];
+            links = [];
+
+            // 1. 创建背景粒子
+            for (let i = 0; i < CONFIG.particleCount; i++) {
+                particles.push(new Particle(false));
+            }
+
+            // 2. 创建核心节点
+            for (let i = 0; i < CONFIG.nodeCount; i++) {
+                const node = new Particle(true);
+                nodes.push(node);
+                particles.push(node); // 把节点也加入渲染循环
+            }
+
+            // 3. 创建连接 (只连接部分节点，避免太乱)
+            for (let i = 0; i < nodes.length; i++) {
+                // 每个节点随机连接 1-2 个其他节点
+                let targetIndex = (i + 1) % nodes.length;
+                links.push(new Arc(nodes[i], nodes[targetIndex]));
+                
+                if (Math.random() > 0.5) {
+                    let targetIndex2 = (i + 2) % nodes.length;
+                    links.push(new Arc(nodes[i], nodes[targetIndex2]));
+                }
+            }
+        }
+
+        let angle = 0;
+        function animate() {
+            ctx.clearRect(0, 0, width, height);
+            
+            angle += CONFIG.rotationSpeed;
+
+            // 1. 绘制背景粒子 & 节点
+            // 为了正确的层级遮挡关系，应该先排序 (Z-sort)，但在极简模式下直接画也行
+            particles.forEach(p => p.draw(angle));
+
+            // 2. 绘制弧线连接
+            links.forEach(l => l.draw(angle));
+
+            requestAnimationFrame(animate);
+        }
+
+        window.addEventListener('resize', init);
+        init();
+        animate();
+
+    </script>
+</body>
+</html>
