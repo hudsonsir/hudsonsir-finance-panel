@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>安装向导 - 财务工具系统</title>
+<script src="https://s4.zstatic.net/ajax/libs/limonte-sweetalert2/11.4.4/sweetalert2.all.min.js"></script>
+<script src="https://s4.zstatic.net/ajax/libs/vue/2.6.14/vue.min.js"></script>
+<script src="https://s4.zstatic.net/ajax/libs/axios/0.26.0/axios.min.js"></script>
+
+<style>
+:root {
+  --background:#f5f1e6;
+  --foreground:#4a3f35;
+  --card:#fffdf8;
+  --border:#d3c7b3;
+  --primary:#a67c52;
+  --primary-foreground:#ffffff;
+  --muted:#7d6b56;
+}
+
+body {
+  margin:0;
+  padding:0;
+  background:var(--background);
+  color:var(--foreground);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+
+.container { max-width:900px; margin:40px auto; padding:10px; }
+
+.panel {
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:12px;
+  box-shadow:0 4px 12px rgba(0,0,0,0.1);
+  padding:25px;
+}
+
+.steps {
+  display:flex;
+  justify-content:space-between;
+  margin-bottom:20px;
+  font-size:14px;
+}
+
+.step {
+  flex:1;
+  padding:6px 0;
+  text-align:center;
+  border-bottom:3px solid var(--border);
+  color:var(--muted);
+}
+
+.step-accent {
+  border-color:var(--primary);
+  color:var(--primary);
+}
+
+.card {
+  padding:20px;
+  border-radius:10px;
+  border:1px solid var(--border);
+  background:var(--card);
+}
+
+.btn {
+  padding:8px 22px;
+  background:var(--primary);
+  color:var(--primary-foreground);
+  border:1px solid var(--primary);
+  border-radius:6px;
+  cursor:pointer;
+}
+
+.btn-outline {
+  background:transparent;
+  color:var(--primary);
+}
+
+.input {
+  width:100%;
+  padding:9px;
+  border-radius:6px;
+  border:1px solid var(--border);
+  background:white;
+}
+
+.label { font-size:14px; margin:10px 0 5px; }
+
+.table { width:100%; border-collapse:collapse; }
+.table th,.table td {
+  padding:8px;
+  border-bottom:1px solid var(--border);
+}
+
+.badge-success {
+  padding:4px 10px;
+  background:#4caf50;
+  color:white;
+  border-radius:6px;
+}
+.badge-error {
+  padding:4px 10px;
+  background:#e53935;
+  color:white;
+  border-radius:6px;
+}
+</style>
+</head>
+
+<body>
+<div id="app" class="container">
+  <div class="panel">
+
+    <!-- 步骤条 -->
+    <div class="steps">
+      <div class="step step-accent">开始</div>
+      <div class="step" :class="{'step-accent':step>=1}">环境</div>
+      <div class="step" :class="{'step-accent':step>=2}">数据库</div>
+      <div class="step" :class="{'step-accent':step>=3}">管理员</div>
+      <div class="step" :class="{'step-accent':step>=4}">完成</div>
+    </div>
+
+    <!-- step 0 -->
+    <div class="card" v-show="step===0">
+      <h2 style="text-align:center;">欢迎安装财务工具系统</h2>
+      <p style="text-align:center;color:var(--muted)">Welcome to install.</p>
+      <div style="text-align:center;margin-top:20px;">
+        <button class="btn" @click="step++">开始安装</button>
+      </div>
+    </div>
+
+    <!-- step 1 -->
+    <div class="card" v-show="step===1">
+      <h2 style="text-align:center;">检测安装环境</h2>
+      <table class="table">
+        <thead><tr><th>项目</th><th>结果</th></tr></thead>
+        <tbody>
+          <tr v-for="(ok,key) in requirements" :key="key">
+            <td>{{ key }}</td>
+            <td>
+              <span v-if="ok" class="badge-success">Yes</span>
+              <span v-else class="badge-error">No</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <div style="text-align:center;margin-top:20px;">
+        <button class="btn" @click="goDatabase">下一步</button>
+      </div>
+    </div>
+
+    <!-- step 2：数据库 -->
+    <div class="card" v-show="step===2">
+      <h2 style="text-align:center;">数据库配置</h2>
+
+      <div class="label">数据库地址</div>
+      <input class="input" v-model="database.hostname">
+
+      <div class="label">端口</div>
+      <input class="input" v-model="database.hostport">
+
+      <div class="label">用户名</div>
+      <input class="input" v-model="database.username">
+
+      <div class="label">密码</div>
+      <input class="input" v-model="database.password">
+
+      <div class="label">数据库名</div>
+      <input class="input" v-model="database.database">
+
+      <div style="text-align:center;margin-top:20px;">
+        <button class="btn" @click="submitDatabase">提交并下一步</button>
+      </div>
+    </div>
+
+    <!-- step 3：管理员 -->
+    <div class="card" v-show="step===3">
+      <h2 style="text-align:center;">管理员账号</h2>
+
+      <div class="label">用户名</div>
+      <input class="input" v-model="admin.username">
+
+      <div class="label">密码</div>
+      <input class="input" v-model="admin.password">
+
+      <div style="text-align:center;margin-top:20px;">
+        <button class="btn" @click="submitAdmin">完成安装</button>
+      </div>
+    </div>
+
+    <!-- step 4 -->
+    <div class="card" v-show="step===4">
+      <h2 style="text-align:center;">安装完成</h2>
+      <div style="text-align:center;margin-top:20px;">
+        <button class="btn btn-outline" onclick="location.href='/'">首页</button>
+        <button class="btn btn-outline" onclick="location.href='/admin/'">后台</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Vue JS -->
+<script>
+const http = (url, data={}) =>
+  axios.post(url, data).then(r => r.data).catch(() => ({status:"error",message:"请求失败"}));
+
+new Vue({
+  el:"#app",
+  data:{
+    step:0,
+    requirements: {}, // 请替换为后端输出
+    database:{
+      hostname:"localhost",
+      hostport:"3306",
+      username:"",
+      password:"",
+      database:""
+    },
+    admin:{
+      username:"admin",
+      password:""
+    }
+  },
+  created(){
+    // 替换示例，正式使用请输出真实值
+    this.requirements = {"PHP >= 7.4": true,"PDO 扩展": true,"GD 扩展": true,"写入权限": true};
+  },
+  methods:{
+    // 检查环境
+    goDatabase(){
+      if(Object.values(this.requirements).includes(false)){
+        Swal.fire({icon:"error",title:"环境检测未通过"});
+        return;
+      }
+      this.step = 2;
+    },
+
+    // 提交数据库配置
+    async submitDatabase(){
+      Swal.fire({title:"正在安装数据库...",allowOutsideClick:false});
+      Swal.showLoading();
+
+      const res = await http("/install/database", this.database);
+      if(res.status !== "ok"){
+        Swal.fire({icon:"error",title:res.message || "数据库安装失败"});
+        return;
+      }
+
+      await http("/install/init_data");
+
+      Swal.fire({icon:"success",title:"数据库安装成功"});
+      this.step = 3;
+    },
+
+    // 提交管理员账户
+    async submitAdmin(){
+      if(!this.admin.password){
+        Swal.fire({icon:"error",title:"请输入管理员密码"});
+        return;
+      }
+
+      Swal.fire({title:"正在保存管理员账号...",allowOutsideClick:false});
+      Swal.showLoading();
+
+      const res = await http("/install/admin", this.admin);
+      if(res.status !== "ok"){
+        Swal.fire({icon:"error",title:res.message || "管理员设置失败"});
+        return;
+      }
+
+      Swal.fire({icon:"success",title:"安装完成"});
+      this.step = 4;
+    }
+  }
+});
+</script>
+
+</body>
+</html>

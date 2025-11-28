@@ -1,0 +1,56 @@
+{
+  "name": "finance-tool",
+  "description": "财务工具 - 续费管理系统",
+  "type": "project",
+  "keywords": [
+    "finance",
+    "renew",
+    "tool",
+    "php",
+    "thinkphp",
+    "management",
+    "billing"
+  ],
+  "homepage": "https://github.com/hudsonsir/finance-panel",
+  "license": "GPL-3.0-only",
+  "authors": [
+    {
+      "name": "Your Name",
+      "email": "your.email@example.com"
+    }
+  ],
+  "support": {
+    "issues": "https://github.com/hudsonsir/finance-panel/issues",
+    "source": "https://github.com/hudsonsir/finance-panel"
+  },
+  "require": {
+    "php": ">=7.4",
+    "topthink/framework": "^6.0.0",
+    "topthink/think-orm": "^2.0",
+    "topthink/think-view": "^1.0",
+    "topthink/think-migration": "^3.0",
+    "ext-curl": "*",
+    "ext-json": "*",
+    "ext-zip": "*",
+    "ext-pdo": "*",
+    "ext-iconv": "*",
+    "khanamiryan/qrcode-detector-decoder": "1.0.5.2",
+    "phpmailer/phpmailer": "^7.0"
+  },
+  "require-dev": {
+    "symfony/var-dumper": "^4.2",
+    "topthink/think-trace": "^1.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "app\\": "app",
+      "plugin\\": "plugin"
+    },
+    "psr-0": {
+      "": "extend/"
+    }
+  },
+  "config": {
+    "preferred-install": "dist"
+  }
+}
