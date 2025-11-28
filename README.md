@@ -27,7 +27,37 @@
 - **发票管理**: 账单和发票链接管理
 
 ## 快速开始
+### 自部署
+* 从[Issues](../../releases)页面下载安装包
 
+* 运行环境要求PHP7.4+，MySQL5.7+
+
+* 设置网站运行目录为`public`
+
+* 设置伪静态为`ThinkPHP`
+##### 伪静态规则
+* Nginx
+
+```
+location / {
+	if (!-e $request_filename){
+		rewrite  ^(.*)$  /index.php?s=$1  last;   break;
+	}
+}
+```
+
+* Apache
+
+```
+<IfModule mod_rewrite.c>
+  Options +FollowSymlinks -Multiviews
+  RewriteEngine On
+
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteRule ^(.*)$ index.php/$1 [QSA,PT,L]
+</IfModule>
+```
 ### 系统要求
 
 - **PHP**: >= 7.4
